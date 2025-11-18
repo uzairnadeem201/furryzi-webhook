@@ -46,84 +46,74 @@ export async function POST(req: NextRequest) {
 
     console.log("Prepared itemImages:", itemImages);
 
-    // For json type, use the object directly (not stringified)
-    const metafieldValue = itemImages;
+    // Convert order ID to GraphQL format
+    const graphqlOrderId = `gid://shopify/Order/${orderId}`;
 
-    console.log("Value for metafield:", JSON.stringify(metafieldValue));
-
-    const metafieldUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json`;
-
-    // Check if metafield exists
-    const checkResponse = await fetch(
-      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json?namespace=custom&key=product_images`,
-      {
-        headers: {
-          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
-        },
+    // Use GraphQL to set metafield (works better with custom metafield definitions)
+    const graphqlQuery = `
+      mutation UpdateOrderMetafield($input: MetafieldsSetInput!) {
+        metafieldsSet(metafields: [$input]) {
+          metafields {
+            id
+            namespace
+            key
+            value
+          }
+          userErrors {
+            field
+            message
+          }
+        }
       }
-    );
+    `;
 
-    const existing = await checkResponse.json();
-    console.log("Existing metafields:", existing);
+    const variables = {
+      input: {
+        ownerId: graphqlOrderId,
+        namespace: "custom",
+        key: "product_images",
+        type: "json",
+        value: JSON.stringify(itemImages),
+      },
+    };
 
-    if (existing.metafields && existing.metafields.length > 0) {
-      // Update existing metafield
-      const mfId = existing.metafields[0].id;
-      const updateUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/metafields/${mfId}.json`;
-      console.log("Updating existing metafield:", mfId);
+    console.log("GraphQL variables:", JSON.stringify(variables, null, 2));
 
-      const updateResponse = await fetch(updateUrl, {
-        method: "PUT",
-        headers: {
-          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          metafield: {
-            value: metafieldValue,
-            type: "json",
-          },
-        }),
-      });
-
-      const updateData = await updateResponse.json();
-      console.log("Update response:", updateData);
-
-      return NextResponse.json({
-        message: "Metafield updated successfully",
-        order_id: orderId,
-        saved: itemImages,
-      });
-    } else {
-      // Create new metafield
-      console.log("Creating new metafield");
-
-      const createResponse = await fetch(metafieldUrl, {
+    const graphqlResponse = await fetch(
+      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/graphql.json`,
+      {
         method: "POST",
         headers: {
           "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          metafield: {
-            namespace: "custom",
-            key: "product_images",
-            type: "json",
-            value: metafieldValue,
-          },
+          query: graphqlQuery,
+          variables: variables,
         }),
-      });
+      }
+    );
 
-      const createData = await createResponse.json();
-      console.log("Create response status:", createResponse.status);
-      console.log("Create response:", JSON.stringify(createData, null, 2));
+    const graphqlData = await graphqlResponse.json();
+    console.log("GraphQL response:", JSON.stringify(graphqlData, null, 2));
 
-      return NextResponse.json({
-        message: "Metafield created successfully",
-        order_id: orderId,
-        saved: itemImages,
-      });
+    if (graphqlData.data?.metafieldsSet?.userErrors?.length > 0) {
+      console.error("GraphQL errors:", graphqlData.data.metafieldsSet.userErrors);
+      return NextResponse.json(
+        {
+          message: "Failed to set metafield",
+          errors: graphqlData.data.metafieldsSet.userErrors,
+        },
+        { status: 400 }
+      );
     }
+
+    return NextResponse.json({
+      message: "Metafield set successfully",
+      order_id: orderId,
+      saved: itemImages,
+      metafield: graphqlData.data?.metafieldsSet?.metafields?.[0],
+    });
   } catch (err) {
     console.error("Error in webhook:", err);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
