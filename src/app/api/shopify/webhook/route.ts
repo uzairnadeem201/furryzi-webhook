@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs"; // VERY IMPORTANT
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,8 +29,6 @@ export async function POST(req: NextRequest) {
     console.log("HMAC verification passed");
 
     const order = JSON.parse(rawBody.toString("utf8"));
-    console.log("Parsed order:", order);
-
     const orderId = order.id;
     console.log("Order ID:", orderId);
 
@@ -48,55 +46,88 @@ export async function POST(req: NextRequest) {
 
     console.log("Prepared itemImages:", itemImages);
 
-    // Convert to HTML for rich_text
+    // Convert to HTML for multi_line_text_field
     const htmlValue = itemImages
       .map(
-        (item:any) =>
-          `<p><strong>${item.product.title}</strong> (${item.product.variant})<br/><img src="${item.image_url}" width="200"/></p>`
+        (item: any) =>
+          `<strong>${item.product.title}</strong> (${item.product.variant})\n<img src="${item.image_url}" width="200"/>`
       )
-      .join("\n");
+      .join("\n\n");
 
-    console.log("HTML value for rich_text:", htmlValue);
+    console.log("Value for metafield:", htmlValue);
 
-    // Send metafield to Shopify
-    const url = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json`;
-    console.log("Shopify URL:", url);
+    const metafieldUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json`;
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        metafield: {
-          namespace: "custom",
-          key: "product_images",
-          type: "rich_text", // changed from JSON to rich_text
-          value: htmlValue,
+    // Check if metafield exists
+    const checkResponse = await fetch(
+      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json?namespace=custom&key=product_images`,
+      {
+        headers: {
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
         },
-      }),
-    });
+      }
+    );
 
-    console.log("Shopify response status:", response.status);
-    const data = await response.json();
-    console.log("Shopify response body:", data);
+    const existing = await checkResponse.json();
+    console.log("Existing metafields:", existing);
 
-    if (!response.ok) {
-      console.error("Failed to add metafield");
-      return NextResponse.json(
-        { message: "Failed", error: data },
-        { status: response.status }
-      );
+    if (existing.metafields && existing.metafields.length > 0) {
+      // Update existing metafield
+      const mfId = existing.metafields[0].id;
+      const updateUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/metafields/${mfId}.json`;
+      console.log("Updating existing metafield:", mfId);
+
+      const updateResponse = await fetch(updateUrl, {
+        method: "PUT",
+        headers: {
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          metafield: {
+            value: htmlValue,
+            type: "multi_line_text_field",
+          },
+        }),
+      });
+
+      const updateData = await updateResponse.json();
+      console.log("Update response:", updateData);
+
+      return NextResponse.json({
+        message: "Metafield updated successfully",
+        order_id: orderId,
+        saved: itemImages,
+      });
+    } else {
+      // Create new metafield
+      console.log("Creating new metafield");
+
+      const createResponse = await fetch(metafieldUrl, {
+        method: "POST",
+        headers: {
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_ACCESS_TOKEN!,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          metafield: {
+            namespace: "custom",
+            key: "product_images",
+            type: "multi_line_text_field",
+            value: htmlValue,
+          },
+        }),
+      });
+
+      const createData = await createResponse.json();
+      console.log("Create response:", createData);
+
+      return NextResponse.json({
+        message: "Metafield created successfully",
+        order_id: orderId,
+        saved: itemImages,
+      });
     }
-
-    console.log("Metafield saved successfully");
-
-    return NextResponse.json({
-      message: "Metafield saved successfully",
-      order_id: orderId,
-      saved: itemImages,
-    });
   } catch (err) {
     console.error("Error in webhook:", err);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
