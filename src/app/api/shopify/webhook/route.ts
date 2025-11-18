@@ -48,6 +48,16 @@ export async function POST(req: NextRequest) {
 
     console.log("Prepared itemImages:", itemImages);
 
+    // Convert to HTML for rich_text
+    const htmlValue = itemImages
+      .map(
+        (item:any) =>
+          `<p><strong>${item.product.title}</strong> (${item.product.variant})<br/><img src="${item.image_url}" width="200"/></p>`
+      )
+      .join("\n");
+
+    console.log("HTML value for rich_text:", htmlValue);
+
     // Send metafield to Shopify
     const url = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json`;
     console.log("Shopify URL:", url);
@@ -62,8 +72,8 @@ export async function POST(req: NextRequest) {
         metafield: {
           namespace: "custom",
           key: "product_images",
-          type: "json",
-          value: JSON.stringify(itemImages, null, 2),
+          type: "rich_text", // changed from JSON to rich_text
+          value: htmlValue,
         },
       }),
     });
