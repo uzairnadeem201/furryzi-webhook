@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     if (existing.metafields && existing.metafields.length > 0) {
       // Update existing metafield
       const mfId = existing.metafields[0].id;
-      const updateUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/metafields/${mfId}.json`;
+      const updateUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/metafields/${mfId}.json`;
       console.log("Updating existing metafield:", mfId);
 
       const updateResponse = await fetch(updateUrl, {
