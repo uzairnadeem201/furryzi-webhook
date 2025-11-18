@@ -46,10 +46,10 @@ export async function POST(req: NextRequest) {
 
     console.log("Prepared itemImages:", itemImages);
 
-    // Convert to JSON string for json metafield type
-    const jsonValue = JSON.stringify(itemImages);
+    // For json type, use the object directly (not stringified)
+    const metafieldValue = itemImages;
 
-    console.log("Value for metafield:", jsonValue);
+    console.log("Value for metafield:", JSON.stringify(metafieldValue));
 
     const metafieldUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json`;
 
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           metafield: {
-            value: jsonValue,
+            value: metafieldValue,
             type: "json",
           },
         }),
@@ -109,13 +109,14 @@ export async function POST(req: NextRequest) {
             namespace: "custom",
             key: "product_images",
             type: "json",
-            value: jsonValue,
+            value: metafieldValue,
           },
         }),
       });
 
       const createData = await createResponse.json();
-      console.log("Create response:", createData);
+      console.log("Create response status:", createResponse.status);
+      console.log("Create response:", JSON.stringify(createData, null, 2));
 
       return NextResponse.json({
         message: "Metafield created successfully",
