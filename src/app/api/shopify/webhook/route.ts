@@ -46,15 +46,10 @@ export async function POST(req: NextRequest) {
 
     console.log("Prepared itemImages:", itemImages);
 
-    // Convert to HTML for multi_line_text_field
-    const htmlValue = itemImages
-      .map(
-        (item: any) =>
-          `<strong>${item.product.title}</strong> (${item.product.variant})\n<img src="${item.image_url}" width="200"/>`
-      )
-      .join("\n\n");
+    // Convert to JSON string for json metafield type
+    const jsonValue = JSON.stringify(itemImages);
 
-    console.log("Value for metafield:", htmlValue);
+    console.log("Value for metafield:", jsonValue);
 
     const metafieldUrl = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-10/orders/${orderId}/metafields.json`;
 
@@ -85,8 +80,8 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           metafield: {
-            value: htmlValue,
-            type: "multi_line_text_field",
+            value: jsonValue,
+            type: "json",
           },
         }),
       });
@@ -113,8 +108,8 @@ export async function POST(req: NextRequest) {
           metafield: {
             namespace: "custom",
             key: "product_images",
-            type: "multi_line_text_field",
-            value: htmlValue,
+            type: "json",
+            value: jsonValue,
           },
         }),
       });
