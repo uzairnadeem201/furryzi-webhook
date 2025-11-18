@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           metafield: {
             namespace: "custom",
-            key: "product_images",
+            key: "products_images",
             type: "multi_line_text_field",
             value: htmlValue,
           },
