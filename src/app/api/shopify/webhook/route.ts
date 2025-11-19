@@ -86,8 +86,12 @@ export async function POST(req: NextRequest) {
         }),
       });
 
-      const updateData = await updateResponse.json();
-      console.log("Update response:", updateData);
+      console.log("Update response status:", updateResponse.status);
+      const updateText = await updateResponse.text();
+      console.log("Update response body:", updateText);
+      
+      const updateData = JSON.parse(updateText);
+      console.log("Update response parsed:", updateData);
 
       return NextResponse.json({
         message: "Metafield updated successfully",
